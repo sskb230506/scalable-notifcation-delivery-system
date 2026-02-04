@@ -1,0 +1,200 @@
+
+
+### Project: Scalable Notification Delivery System
+
+**Stage completed:** Producer + Consumer (Event-driven architecture)
+
+---
+
+## 1. What i built so far
+
+In this stage, i implemented a **basic asynchronous notification system** using Redis as a message queue.
+
+### Components implemented:
+
+1. **Event API (Producer)**
+
+   * Exposes an API endpoint to accept notification events.
+   * Validates request data.
+   * Pushes events into a Redis queue.
+   * Returns response immediately without processing the notification.
+
+2. **Redis Queue**
+
+   * Used Redis Lists to store events.
+   * Acts as a buffer betien API and notification processing.
+   * Enables asynchronous and decoupled execution.
+
+3. **Notification Worker (Consumer)**
+
+   * A separate Node.js process.
+   * Uses Redis `BLPOP` to block and wait for events.
+   * Consumes events one at a time.
+   * Processes notifications using a mock notifier function.
+
+This architecture decouples **request handling** from **notification delivery**, improving scalability and reliability.
+
+---
+
+## 2. Why this design was chosen
+
+### Problem with synchronous design:
+
+In a traditional synchronous approach:
+
+* API waits for notification logic to complete.
+* Slow or failing notification services block user requests.
+* High traffic causes cascading failures.
+
+### Solution:
+
+i introduced a **producer–consumer model**:
+
+* API only enqueues events.
+* Worker processes events independently.
+* Redis acts as a buffer to absorb traffic spikes.
+
+This allows:
+
+* Faster API responses
+* Independent scaling of workers
+* Better fault isolation
+
+---
+
+## 3. Major errors encountered (and why they happened)
+
+### ❌ Error 1: Redis client method not found (`rPush is not a function`)
+
+**What happened:**
+
+* Redis client helper methods (`rPush`, `sendCommand`) behaved inconsistently across versions.
+* Different Redis client versions expose different APIs.
+
+**Why it happened:**
+
+* Redis Node.js client has breaking API changes across versions.
+* Helper methods are not guaranteed to exist in all configurations.
+
+**How i fixed it:**
+
+* Switched Redis client to `legacyMode`.
+* Used stable, callback-based commands (`rpush`, `blpop`).
+* This ensured predictable behavior and compatibility.
+
+**Key learning:**
+
+> Client abstractions change, but Redis commands remain stable.
+
+---
+
+### ❌ Error 2: JavaScript heap out of memory (Node crash)
+
+**Error observed:**
+
+```
+FATAL ERROR: JavaScript heap out of memory
+```
+
+**What caused it:**
+
+* The Redis consumer was implemented with:
+
+  ```js
+  while (true) {
+    redisClient.blpop(...)
+  }
+  ```
+* `BLPOP` is already a blocking call.
+* Wrapping it inside `while(true)` caused:
+
+  * Millions of callbacks to be registered
+  * Unbounded memory growth
+  * Eventual process crash
+
+**Why this is dangerous:**
+
+* Blocking calls must never be placed inside infinite loops.
+* This creates memory leaks and crashes even at low load.
+
+**How i fixed it:**
+
+* Removed the infinite loop.
+* Implemented recursive consumption:
+
+  * Call `BLPOP` once
+  * Process the event
+  * Call `BLPOP` again after processing
+
+This guarantees:
+
+* Only one active listener at a time
+* Constant memory usage
+* Stable long-running worker process
+
+**Key learning:**
+
+> Scalability issues often come from control-flow bugs, not tools.
+
+---
+
+## 4. What this stage proves
+
+At this point, the system demonstrates:
+
+* Event-driven architecture
+* Decoupling of API and background processing
+* Proper use of Redis as a message queue
+* Blocking consumption without polling
+* Real-world debugging of client and memory issues
+
+This is a strong foundation for adding:
+
+* Retry logic
+* Dead Letter Queue
+* Idempotency
+* Performance testing
+
+---
+
+## 5. High-level system flow
+
+```
+Client
+  ↓
+Event API (Producer)
+  ↓
+Redis Queue
+  ↓
+Worker (Consumer)
+  ↓
+Notification Logic
+```
+
+---
+
+## 6. Honest engineering takeaway
+
+This stage involved **real backend problems**, including:
+
+* Dependency API mismatches
+* Incorrect use of blocking operations
+* Memory leaks due to control-flow mistakes
+
+Each issue was resolved by:
+
+* Understanding underlying behavior
+* Simplifying design
+* Choosing stable, predictable patterns
+
+---
+
+## 7. Current status
+
+✅ Event ingestion working
+✅ Redis queue functioning
+✅ Worker consuming events safely
+✅ No memory leaks
+⏳ Retry & DLQ to be implemented next
+
+

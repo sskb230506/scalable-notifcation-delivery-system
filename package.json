@@ -1,0 +1,22 @@
+{
+  "name": "scalable-notification-delviery-system",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node api/app.js",
+    "dev": "nodemon api/app.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "redis": "^4.6.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  }
+}
